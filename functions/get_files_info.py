@@ -20,11 +20,11 @@ def get_files_info(working_directory, directory="."):
             return error
         
         files = os.listdir(target_dir)
-
+        file_info = ""
         for file in files:
             size = os.path.getsize(f"{target_dir}/{file}")
             is_dir = os.path.isdir(f"{target_dir}/{file}")
-            print(f"- {file}: file_size={size} bytes, is_dir={is_dir}")
-        print(f"Error: {error}")
+            file_info += f"- {file}: file_size={size} bytes, is_dir={is_dir}\n"
+        return file_info
     except:
-        raise Exception("Error: unable to get files info")
+        return error

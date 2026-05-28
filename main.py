@@ -3,6 +3,7 @@ import argparse
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from prompts import system_prompt
 
 def main():
     # Load environment variables
@@ -24,7 +25,11 @@ def main():
     messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
 
     user_prompt = "Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum."
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=messages)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=messages,
+        config=types.GenerateContentConfig(system_instruction=system_prompt)
+    )
     
     if response.usage_metadata == None:
         raise Exception(RuntimeError)
@@ -36,6 +41,7 @@ def main():
         print(f"Response: \n{response.text}")
     else:
         print(f"Response: \n{response.text}")
+
 
 
 if __name__ == "__main__":
