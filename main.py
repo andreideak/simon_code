@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from prompts import system_prompt
+from functions.call_function import available_functions
 
 def main():
     # Load environment variables
@@ -25,23 +26,30 @@ def main():
     messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
 
     user_prompt = "Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum."
+    
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=messages,
-        config=types.GenerateContentConfig(system_instruction=system_prompt)
+        config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0, tools=[available_functions])
     )
     
     if response.usage_metadata == None:
         raise Exception(RuntimeError)
     
     if args.verbose:
+        print(f"Response: {response}")
+        print(f"System prompt: {system_prompt}")
         print(f"User prompt: {args.user_prompt}")
         print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
         print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
-        print(f"Response: \n{response.text}")
+        print(f"Function calls:\n{response.function_calls}")
+        print(f"Response text:\n- {response.text}")
     else:
-        print(f"Response: \n{response.text}")
-
+        if response.function_calls is not None:
+            for function_call in response.function_calls:
+                print(f"Calling function: {function_call.name}({function_call.args})")
+        elif response.function_calls is None:
+            print(f"- {response.text}")
 
 
 if __name__ == "__main__":
