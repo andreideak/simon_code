@@ -4,9 +4,47 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from prompts import system_prompt
-from functions.call_function import available_functions
+from call_function import available_functions, call_function
+
+def generate_content(client: genai.Client, messages: list[types.Content], verbose: bool) -> None:
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=messages,
+        config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0, tools=[available_functions])
+    )
+    
+    if not response.usage_metadata:
+        raise RuntimeError("Gemini API response appears to be malformed")
+    
+    if verbose:
+        print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+        print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+
+    if not response.function_calls:
+        print(f" - {response.text}")
+        return
+    
+
+    function_responses: list[types.Part] = []
+    for function_call in response.function_calls:
+        result = call_function(function_call,verbose)
+        if (
+            not result.parts
+            or not result.parts[0].function_response
+            or not result.parts[0].function_response.response
+        ): 
+            raise RuntimeError(f"Empty function response for {function_call.name}")
+        if verbose:
+            print(f"-> {result.parts[0].function_response.response}") 
+        function_responses.append(result.parts[0])
 
 def main():
+    # Use argparser to extract question from command argument
+    parser = argparse.ArgumentParser(description="Simon Code")
+    parser.add_argument("user_prompt", type=str, help="User prompt")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+    args = parser.parse_args()
+    
     # Load environment variables
     load_dotenv()
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -16,41 +54,14 @@ def main():
     # Generate Gemini client
     client = genai.Client(api_key=api_key)
 
-    # Use argparser to extract question from command argument
-    parser = argparse.ArgumentParser(description="Simon Code")
-    parser.add_argument("user_prompt", type=str, help="User prompt")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
-    args = parser.parse_args()
-
     # Store chat conversation
-    messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
+    messages: list[types.Content] = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
 
-    user_prompt = "Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum."
-    
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=messages,
-        config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0, tools=[available_functions])
-    )
-    
-    if response.usage_metadata == None:
-        raise Exception(RuntimeError)
-    
     if args.verbose:
-        print(f"Response: {response}")
-        print(f"System prompt: {system_prompt}")
         print(f"User prompt: {args.user_prompt}")
-        print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
-        print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
-        print(f"Function calls:\n{response.function_calls}")
-        print(f"Response text:\n- {response.text}")
-    else:
-        if response.function_calls is not None:
-            for function_call in response.function_calls:
-                print(f"Calling function: {function_call.name}({function_call.args})")
-        elif response.function_calls is None:
-            print(f"- {response.text}")
 
+    generate_content(client, messages, args.verbose)
+               
 
 if __name__ == "__main__":
     main()
